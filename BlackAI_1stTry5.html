@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="fa">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎯 مدیریت پروژه</title>
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        input, textarea {
+            width: 100%;
+            border: none;
+            outline: none;
+        }
+        .delete-button {
+            background-color: red;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        .add-button {
+            background-color: green;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        .toggle-button {
+            background-color: blue;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<h2>مدیریت پروژه</h2>
+<table id="editableTable">
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>پروژه</th>
+            <th>فعالیت</th>
+            <th>زمان نهایی</th>
+            <th>مسؤول پیگیری</th>
+            <th>وضعیت</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        <!-- Rows will be added here -->
+    </tbody>
+</table>
+
+<button onclick="addRows(2)">فعالیت جدید</button>
+<button onclick="clearCache()">پاک کردن کش</button>
+
+<script>
+    let typingTimer; // Timer identifier
+    const typingDelay = 1000; // Delay in milliseconds
+
+    // Check if the main table is empty on page load
+    window.onload = function() {
+        const tableBody = document.getElementById('editableTable').getElementsByTagName('tbody')[0];
+        checkTableEmpty(tableBody);
+        loadData(); // Load data from localStorage
+    };
+
+    function addRows(num) {
+        const tableBody = document.getElementById('editableTable').getElementsByTagName('tbody')[0];
+
+        for (let j = 0; j < num; j++) {
+            const newRow = tableBody.insertRow();
+
+            if (tableBody.rows.length % 2 !== 0) { // Odd row: Add inputs, delete button, and toggle show/hide button
+                const newCell = newRow.insertCell(0);
+                newCell.innerText = tableBody.rows.length; // Assign sequential number
+
+                for (let i = 1; i < 6; i++) {
+                    const newCell = newRow.insertCell(i);
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.placeholder = `ردیف ${tableBody.rows.length} ستون ${i + 1}`;
+                    input.addEventListener('input', () => saveData()); // Save data on input
+                    newCell.appendChild(input);
+                }
+
+                const actionCell = newRow.insertCell(6);
+               
+                const deleteButton = document.createElement('button');
+                deleteButton.innerText = 'حذف';
+                deleteButton.className = 'delete-button';
+                deleteButton.onclick = function() {
+                    tableBody.deleteRow(newRow.rowIndex);     // Delete the next (even) row
+                    tableBody.deleteRow(newRow.rowIndex - 1); // Delete the current row
+                    updateSequentialNumbers(); // Update sequential numbers after deletion
+                    checkTableEmpty(tableBody); // Check if the table is empty
+                };
+                actionCell.appendChild(deleteButton);
+                
+                const toggleButton = document.createElement('button');
+                toggleButton.innerText = 'toggle';
+                toggleButton.className = 'toggle-button';
+                toggleButton.onclick = function() {
+                    const nextRow = tableBody.rows[newRow.rowIndex];
+                    if (nextRow) {
+                        nextRow.classList.toggle('hidden');
+                    }
+                };
+                actionCell.appendChild(toggleButton);
+            } else { // Even row: Create a single cell spanning all columns with a nested table
+                const nestedCell = newRow.insertCell(0);
+                nestedCell.colSpan = 7; // Span across all columns
+
+                const nestedTable = document.createElement('table');
+                const nestedTbody = document.createElement('tbody');
+
+                // Create header for nested table
+                const nestedHeader = nestedTable.createTHead();
+                const headerRow = nestedHeader.insertRow();
+                
+                const headerCell1 = document.createElement('th');
+                headerCell1.innerText = `#`;
+                headerRow.appendChild(headerCell1);
+                
+                const headerCell2 = document.createElement('th');
+                headerCell2.innerText = `تاریخ جلسه`;
+                headerRow.appendChild(headerCell2);
+                
+                const headerCell3 = document.createElement('th');
+                headerCell3.innerText = `اقدامات`;
+                headerRow.appendChild(headerCell3);
+                
+                const actionHeaderCell = document.createElement('th');
+                actionHeaderCell.innerText = '';
+                headerRow.appendChild(actionHeaderCell);
+
+                nestedTable.appendChild(nestedTbody);
+                nestedCell.appendChild(nestedTable);
+               
+                // Initially hide the even rows in the main table
+                tableBody.rows[newRow.rowIndex - 1].classList.add('hidden');
+                
+                // Initially hide the nested table header
+                checkNestedTableEmpty(nestedTbody, nestedHeader);
+
+                const addNestedRowButton = document.createElement('button');
+                addNestedRowButton.innerText = 'اقدام جدید';
+                addNestedRowButton.className = 'add-button';
+                addNestedRowButton.onclick = function() {
+                    addNestedRow(nestedTbody);
+                    checkNestedTableEmpty(nestedTbody, nestedHeader); // Check if the nested table is empty
+                };
+                nestedCell.appendChild(addNestedRowButton);
+            }
+        }
+        updateSequentialNumbers(); // Update sequential numbers after adding rows
+        checkTableEmpty(tableBody); // Check if the main table is empty
+    }
+
+    function addNestedRow(nestedTbody) {
+        const nestedRow = nestedTbody.insertRow();
+
+        const newCell0 = nestedRow.insertCell(0);
+        newCell0.innerText = nestedTbody.rows.length; // Assign sequential number for nested row
+
+        const newCell1 = nestedRow.insertCell(1);
+        const input1 = document.createElement('input');
+        input1.type = 'text';
+        input1.placeholder = `تاریخ جلسه`;
+        input1.addEventListener('input', () => saveData()); // Save data on input
+        newCell1.appendChild(input1);
+        
+        const newCell2 = nestedRow.insertCell(2);
+        const input2 = document.createElement('textarea');
+        input2.placeholder = `اقدامات مصوب`;
+        input2.addEventListener('input', () => saveData()); // Save data on input
+        newCell2.appendChild(input2);
+
+        const actionCell = nestedRow.insertCell(3);
+        const deleteNestedButton = document.createElement('button');
+        deleteNestedButton.innerText = 'حذف';
+        deleteNestedButton.className = 'delete-button';
+        deleteNestedButton.onclick = function() {
+            nestedTbody.deleteRow(nestedRow.rowIndex - 1);
+            updateNestedSequentialNumbers(nestedTbody); // Update nested row numbers after deletion
+            checkNestedTableEmpty(nestedTbody); // Check if the nested table is empty
+        };
+        actionCell.appendChild(deleteNestedButton);
+        
+        updateNestedSequentialNumbers(nestedTbody); // Update nested row numbers after adding a new row
+    }
+
+    function checkTableEmpty(tableBody) {
+        const isEmpty = tableBody.rows.length === 0;
+        const header = document.getElementById('editableTable').getElementsByTagName('thead')[0];
+        header.style.display = isEmpty ? 'none' : '';
+    }
+
+    function checkNestedTableEmpty(nestedTbody) {
+        const isEmpty = nestedTbody.rows.length === 0;
+        nestedTbody.parentNode.tHead.style.display = isEmpty ? 'none' : '';
+    }
+
+    function updateSequentialNumbers() {
+        const tableBody = document.getElementById('editableTable').getElementsByTagName('tbody')[0];
+        let count = 1; // Start counting from 1
+        for (let i = 0; i < tableBody.rows.length; i++) {
+            if (i % 2 === 0) { // Check if the row index is even (which corresponds to odd rows in terms of display)
+                const cell = tableBody.rows[i].cells[0]; // Get the first cell (index 0)
+                if (cell) {
+                    cell.innerText = count; // Assign sequential number
+                    count++; // Increment the count for the next odd row
+                }
+            }
+        }
+    }
+
+    function updateNestedSequentialNumbers(nestedTbody) {
+        let count = 1; // Start counting from 1
+        for (let i = 0; i < nestedTbody.rows.length; i++) {
+            const cell = nestedTbody.rows[i].cells[0]; // Get the first cell (index 0)
+            if (cell) {
+                cell.innerText = count; // Assign sequential number
+                count++; // Increment the count for the next row
+            }
+        }
+    }
+
+    function saveData() {
+	    const tableBody = document.getElementById('editableTable').querySelectorAll('tbody')[0];
+	    const data = [];
+	    for (let i = 0; i < tableBody.rows.length; i++) {
+	        if (i % 2 !== 0) { // Skip the odd rows (actions)
+	            const row = tableBody.rows[i];
+	            const nestedTbody = row.cells[5].querySelector('table').querySelector('tbody');
+	            for (let j = 0; j < nestedTbody.rows.length; j++) {
+	                const nestedRow = nestedTbody.rows[j];
+	                const nestedData = {};
+	                for (let k = 0; k < nestedRow.cells.length - 1; k++) { // Exclude the delete button cell
+	                    nestedData[`nested_column${k}`] = nestedRow.cells[k].querySelector('input').value || '';
+	                }
+	                data.push({ ...row.children[0].innerHTML, ...nestedData });
+	            }
+	        }
+	    }
+	    localStorage.setItem('projectData', JSON.stringify(data));
+	}
+
+
+    function loadData() {
+	    const data = JSON.parse(localStorage.getItem('projectData')) || [];
+    	const tableBody = document.getElementById('editableTable').querySelectorAll('tbody')[0];
+    	data.forEach((rowData, index) => {
+    	    const newRow = tableBody.insertRow();
+    	    const newCell = newRow.insertCell(0);
+    	    newCell.innerText = index + 1; // Assign sequential number
+    	    
+    	    const input = newRow.insertCell(1);
+    	    input.innerHTML = `<input type="text" placeholder="ردیف ${index + 1} ستون 2" value="${rowData.column2}" oninput="saveData()">`;
+    	    
+    	    const input2 = newRow.insertCell(2);
+    	    input2.innerHTML = `<input type="text" placeholder="ردیف ${index + 1} ستون 3" value="${rowData.column3}" oninput="saveData()">`;
+    	    
+    	    const input3 = newRow.insertCell(3);
+    	    input3.innerHTML = `<input type="text" placeholder="ردیف ${index + 1} ستون 4" value="${rowData.column4}" oninput="saveData()">`;
+    	    
+    	    const input4 = newRow.insertCell(4);
+    	    input4.innerHTML = `<input type="text" placeholder="ردیف ${index + 1} ستون 5" value="${rowData.column5}" oninput="saveData()">`;
+    	    
+    	    const nestedTableCell = newRow.insertCell(5);
+    	    nestedTableCell.innerHTML = `<table><thead><tr><th>#</th><th>تاریخ جلسه</th><th>اقدامات</th><th></th></tr></thead><tbody>`;
+    	    
+    	    for (const nestedRowData of Object.values(rowData)) {
+    	        if (nestedRowData) {
+    	            const nestedRow = nestedTableCell.querySelector('table tbody').insertRow();
+    	            nestedRow.innerHTML = `<td><input type="text" placeholder="ردیف ${index + 1} تاریخ جلسه" value="${nestedRowData.nested_column0}" oninput="saveData()"></td><td><input type="text" placeholder="اقدامات مصوب" value="${nestedRowData.nested_column1}" oninput="saveData()"></td><td><button onclick="deleteRow(event)">حذف</button></td>`;
+    	        }
+    	    }
+    	    
+    	    const deleteButton = nestedTableCell.querySelector('button');
+    	    deleteButton.onclick = function() {
+    	        const nestedTbody = nestedTableCell.querySelector('table tbody');
+    	        nestedRow.parentNode.removeChild(nestedRow);
+    	        updateNestedSequentialNumbers(nestedTbody);
+    	        checkNestedTableEmpty(nestedTableCell.querySelector('table').querySelector('tbody'));
+    	        saveData(); // Save the updated data to localStorage
+    	    }.bind(nestedTableCell);
+    	});
+    	
+    	updateSequentialNumbers(); // Update sequential numbers after loading data
+    	checkTableEmpty(tableBody); // Check if the main table is empty
+	}
+    
+    function clearCache() {
+    	localStorage.removeItem('projectData'); // Remove the specific item from localStorage
+    	const tableBody = document.getElementById('editableTable').getElementsByTagName('tbody')[0];
+    	while (tableBody.rows.length > 0) {
+    	    tableBody.deleteRow(0); // Clear all rows from the table
+    	}
+    	checkTableEmpty(tableBody); // Check if the table is empty
+	}
+</script>
+
+</body>
+</html>
